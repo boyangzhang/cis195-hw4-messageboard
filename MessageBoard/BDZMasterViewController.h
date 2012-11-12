@@ -7,7 +7,6 @@
 //
 
 #import <UIKit/UIKit.h>
-
-@interface BDZMasterViewController : UITableViewController
+@interface BDZMasterViewController : UITableViewController <NSURLConnectionDataDelegate>
 
 @end

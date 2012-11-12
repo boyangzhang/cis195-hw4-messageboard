@@ -12,6 +12,7 @@
 
 @interface BDZMasterViewController () {
     NSMutableArray *_objects;
+    NSMutableData *_data;
 }
 @end
 
@@ -25,11 +26,31 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    
+    
+    //Implements a pulldown refresh bar
+    UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
+    [refreshControl addTarget:self action:@selector(refreshRequestCall) forControlEvents:UIControlEventValueChanged];
+    self.refreshControl = refreshControl;
+
 	// Do any additional setup after loading the view, typically from a nib.
     self.navigationItem.leftBarButtonItem = self.editButtonItem;
 
     UIBarButtonItem *addButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(insertNewObject:)];
     self.navigationItem.rightBarButtonItem = addButton;
+    [self refreshRequestCall];
+        	
+}
+
+
+//Sets up the method call
+-(void)refreshRequestCall {
+    //Sets up heroku connection
+    NSString *url = @"http://cis195-messages.herokuapp.com/messages";
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:url]];
+    NSURLConnection *connection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
+    [connection start];
+
 }
 
 - (void)didReceiveMemoryWarning
@@ -43,7 +64,13 @@
     if (!_objects) {
         _objects = [[NSMutableArray alloc] init];
     }
-    [_objects insertObject:[NSDate date] atIndex:0];
+    //Creates a new empty object;
+    NSMutableDictionary *newPost = [[NSMutableDictionary alloc] init];
+    NSDate *currDate = [[NSDate alloc] init];
+    [newPost setObject:@"Click to modify" forKey:@"title"];
+    [newPost setObject:[currDate description] forKey:@"created_at"];
+    [newPost setObject:[currDate description] forKey:@"updated_at"];
+    [_objects insertObject:newPost atIndex:0];
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:0 inSection:0];
     [self.tableView insertRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
 }
@@ -64,8 +91,12 @@
 {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell" forIndexPath:indexPath];
 
-    NSDate *object = _objects[indexPath.row];
-    cell.textLabel.text = [object description];
+    NSDictionary *location = _objects[indexPath.row];
+    NSString *title = [location objectForKey:@"title"];
+    if(title != nil && ![title isKindOfClass:[NSNull class]]) cell.textLabel.text = title;
+    NSString *body = [location objectForKey:@"body"];
+    if(body != nil && ![body isKindOfClass:[NSNull class]]) cell.detailTextLabel.text = body;
+        
     return cell;
 }
 
@@ -108,6 +139,43 @@
         NSDate *object = _objects[indexPath.row];
         [[segue destinationViewController] setDetailItem:object];
     }
+    
+
 }
+
+#pragma mark - NSURLConnectionDataDelegate methods
+
+/**
+ * Here are the NSURLConnectionDataDelegate methods that handle the callbacks.
+ * This is mostly primarily and three step process, assuming you get no errors.
+ *
+ * 1. You receive a response.
+ * 2. You receive any number of pieces of data.
+ * 3. The connection finishes loading. That is, you are ready to use the combined pieces of data.
+ */
+
+- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response {
+    _data = [[NSMutableData alloc] init];
+}
+
+- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data {
+    [_data appendData:data];
+}
+
+- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error {
+    // Please do something sensible here, like log the error.
+}
+
+- (void)connectionDidFinishLoading:(NSURLConnection *)connection {
+    NSMutableArray *dictResp = [NSJSONSerialization JSONObjectWithData:_data options:0 error:nil];
+    if (!_objects) {
+        _objects = [[NSMutableArray alloc] init];
+    }
+    [_objects addObjectsFromArray:dictResp];
+    [self.tableView reloadData];
+    [self.refreshControl endRefreshing];
+    NSLog(@"%@", dictResp); // If you want to see what the 4SQ response looks like.
+}
+
 
 @end
